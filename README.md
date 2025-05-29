@@ -38,7 +38,7 @@ poetry run python cli.py server on
 Turn a device off:
 
 ```
-poetry run python cli.py server on
+poetry run python cli.py server off
 ```
 
 Check the state of a device:
