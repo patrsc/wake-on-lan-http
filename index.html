@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Devices</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 2rem;
+      background: #f9f9f9;
+    }
+
+    h1 {
+      font-size: 2rem;
+      margin-bottom: 1rem;
+      margin-top: 0;
+    }
+
+    .device {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1rem;
+      background: #fff;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      margin-bottom: 1rem;
+    }
+
+    .device-name {
+      font-size: 1.2rem;
+    }
+
+    .toggle {
+      width: 50px;
+      height: 28px;
+      background-color: white;
+      border-radius: 999px;
+      position: relative;
+      cursor: pointer;
+      transition: background-color 0.3s;
+      border: 1px solid #ccc;
+    }
+
+    .toggle-circle {
+      width: 24px;
+      height: 24px;
+      background: #ccc;
+      border-radius: 50%;
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      transition: left 0.3s, background 0.3s;
+    }
+
+    .on .toggle {
+      background-color: #32a852;
+    }
+
+    .on .toggle-circle {
+      left: 24px;
+      background: white;
+    }
+
+    .pending .toggle {
+      background-color: #f5c107 !important;
+    }
+
+    .pending .toggle-circle {
+      background: #fff;
+    }
+  </style>
+</head>
+<body>
+  <h1>Devices</h1>
+  <div id="device-list"></div>
+
+  <script>
+    const API_BASE = '/devices';
+    const POLL_INTERVAL = 1000;
+
+    async function fetchDevices() {
+      const res = await fetch(`${API_BASE}`);
+      return res.json();
+    }
+
+    async function fetchDeviceState(id) {
+      const res = await fetch(`${API_BASE}/${id}/state`);
+      return res.json();
+    }
+
+    async function setDeviceState(id, on) {
+      const method = 'PUT';
+      const url = `${API_BASE}/${id}/${on ? 'on' : 'off'}`;
+      await fetch(url, { method });
+    }
+
+    function createDeviceElement(device) {
+      const el = document.createElement('div');
+      el.className = 'device';
+      el.dataset.deviceId = device.id;
+
+      const nameEl = document.createElement('div');
+      nameEl.className = 'device-name';
+      nameEl.textContent = device.name;
+
+      const toggleWrapper = document.createElement('div');
+      toggleWrapper.className = 'toggle';
+      const circle = document.createElement('div');
+      circle.className = 'toggle-circle';
+      toggleWrapper.appendChild(circle);
+
+      const stateWrapper = document.createElement('div');
+      stateWrapper.className = '';
+      stateWrapper.appendChild(toggleWrapper);
+
+      el.appendChild(nameEl);
+      el.appendChild(stateWrapper);
+
+      toggleWrapper.addEventListener('click', async () => {
+        if (stateWrapper.classList.contains('pending')) return;
+
+        const newState = !(stateWrapper.classList.contains('on'));
+        stateWrapper.classList.add('pending');
+        stateWrapper.dataset.targetState = newState ? 'on' : 'off';
+        await setDeviceState(device.id, newState);
+      });
+
+      return el;
+    }
+
+    async function updateStates(container) {
+      const children = container.children;
+      for (let i = 0; i < children.length; i++) {
+        const el = children[i];
+        const id = el.dataset.deviceId;
+        const stateWrapper = el.querySelector('div > .toggle').parentElement;
+
+        try {
+          const state = await fetchDeviceState(id);
+          const isOn = state.state === 'on';
+          const classList = stateWrapper.classList;
+
+          if (classList.contains('pending')) {
+            const target = stateWrapper.dataset.targetState;
+            if ((isOn && target === 'on') || (!isOn && target === 'off')) {
+                stateWrapper.classList.remove('pending');
+                delete stateWrapper.dataset.targetState;
+            }
+          }
+
+          classList.toggle('on', isOn);
+        } catch (e) {
+          console.error('Error fetching state for', id, e);
+        }
+      }
+    }
+
+    async function init() {
+      const container = document.getElementById('device-list');
+      const devices = await fetchDevices();
+      devices.forEach(device => {
+        const el = createDeviceElement(device);
+        container.appendChild(el);
+      });
+
+      updateStates(container);
+      setInterval(() => updateStates(container), POLL_INTERVAL);
+    }
+
+    init();
+  </script>
+</body>
+</html>
